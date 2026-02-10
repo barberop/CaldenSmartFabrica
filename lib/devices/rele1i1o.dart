@@ -30,6 +30,10 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
 
   final bool canControl = (accessLevel >= 3 || owner == '');
 
+  List<String> _pulse_mode = [];
+  List<String> _pulse_mode_timers = [];
+  bool varsLoaded = false;
+
   // Obtener el índice correcto para cada página
   int _getPageIndex(String pageType) {
     int index = 0;
@@ -51,6 +55,8 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
     // Creds page (solo si accessLevel > 1)
     if (accessLevel > 1) {
       if (pageType == 'burneo') return index;
+      index++;
+      if (pageType == 'variables') return index;
       index++;
       if (pageType == 'creds') return index;
       index++;
@@ -143,6 +149,16 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
                       _navigateToTab(_getPageIndex('burneo'));
                     },
                   ),
+                if (accessLevel > 1)
+                  ListTile(
+                    leading: const Icon(Icons.tune, color: color4),
+                    title: const Text('Variables',
+                        style: TextStyle(color: color4)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navigateToTab(_getPageIndex('variables'));
+                    },
+                  ),
                 // Creds page (solo si accessLevel > 1)
                 if (accessLevel > 1)
                   ListTile(
@@ -224,6 +240,7 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
     subscribeToWifiStatus();
     subToIO();
     processValues(ioValues);
+    processVarsValues(varsValues);
   }
 
   void updateWifiValues(List<int> data) {
@@ -354,6 +371,67 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
     } else {
       printLog('!=200 ${response.statusCode}');
     }
+  }
+
+  void processVarsValues(List<int> values) {
+    try {
+      varsValues = values;
+      var fun = utf8.decode(values, allowMalformed: true);
+      fun = fun.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+      var parts = fun.split(':');
+      printLog('Vars Valores: $parts', "Amarillo");
+
+      if (parts.length < 5) {
+        printLog('Error: Lectura de vars incompleta. Se bloquean ediciones.');
+        setState(() {
+          varsLoaded = false;
+        });
+        return;
+      }
+
+      awsInit = parts[1] == '1';
+      burneoDone = parts[2] == '1';
+
+      _pulse_mode.clear();
+      _pulse_mode_timers.clear();
+
+      String mode = parts[3].trim();
+      _pulse_mode.add(mode == '1' ? '1' : '0');
+
+      String timerStr = parts[4].trim();
+      int? timerVal = int.tryParse(timerStr);
+      _pulse_mode_timers
+          .add((timerVal != null && timerVal > 0) ? timerStr : "1000");
+
+      setState(() {
+        varsLoaded = true;
+      });
+    } catch (e) {
+      printLog('Error crítico procesando vars: $e');
+      setState(() {
+        varsLoaded = false;
+      });
+    }
+  }
+
+  void sendDeviceBehaviour(String pin, bool isSwitch) {
+    String pc = DeviceManager.getProductCode(deviceName);
+    String serialNumber = DeviceManager.extractSerialNumber(deviceName);
+    String msg = '$pc[16]($pin#${isSwitch ? '0' : '1'})';
+    printLog('Se volvio el pin $pin a ${isSwitch ? 'SWITCH' : 'PULSE'}');
+    bluetoothManager.toolsUuid.write(msg.codeUnits);
+    registerActivity(pc, serialNumber,
+        'Cambio de comportamiento del pin $pin a ${isSwitch ? 'SWITCH' : 'PULSE'}');
+  }
+
+  void sendPulseTimer(String pin, String timer) {
+    String pc = DeviceManager.getProductCode(deviceName);
+    String serialNumber = DeviceManager.extractSerialNumber(deviceName);
+    String msg = '$pc[17]($pin#$timer)';
+    printLog('Se cambio el tiempo de pulso del pin $pin a $timer milisegundos');
+    bluetoothManager.toolsUuid.write(msg.codeUnits);
+    registerActivity(pc, serialNumber,
+        'Cambio del tiempo de pulso del pin $pin a $timer milisegundos');
   }
 
   //! VISUAL
@@ -793,6 +871,66 @@ class Rele1i1oPageState extends State<Rele1i1oPage> {
           ),
         ),
 
+        //*- Página 5 variables -*\\
+        Scaffold(
+          backgroundColor: color4,
+          body: Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: Column(
+                children: [
+                  const SizedBox(
+                    height: 200,
+                  ),
+                  buildText(
+                    text: 'Comportamiento de la salida:',
+                    fontSize: 20.0,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('SWITCH'),
+                        selected: _pulse_mode[0] == '1',
+                        onSelected: (sel) {
+                          setState(() {
+                            _pulse_mode[0] = '1';
+                          });
+                          sendDeviceBehaviour('0', true);
+                        },
+                        selectedColor: color1,
+                        backgroundColor: color0,
+                        labelStyle: TextStyle(
+                            color: _pulse_mode[0] == '1' ? color4 : color1),
+                        checkmarkColor: color4,
+                      ),
+                      const SizedBox(width: 12),
+                      ChoiceChip(
+                        label: const Text('PULSE'),
+                        selected: _pulse_mode[0] == '0',
+                        onSelected: (sel) {
+                          setState(() {
+                            _pulse_mode[0] = '0';
+                          });
+                          sendDeviceBehaviour('0', false);
+                        },
+                        selectedColor: color1,
+                        backgroundColor: color0,
+                        labelStyle: TextStyle(
+                            color: _pulse_mode[0] == '0' ? color4 : color1),
+                        checkmarkColor: color4,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(
+                    height: 200,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
         //*- Página 5 CREDENTIAL -*\\
         const CredsTab(),
       ],

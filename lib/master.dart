@@ -2482,31 +2482,14 @@ class BluetoothManager {
                 (c) => c.uuid == Guid('52a2f121-a8e3-468c-a5de-45dca9a2a207'));
             break;
           case '027313_IOT':
-            if (Versioner.isPosterior(hardwareVersion, '241220A')) {
-              printLog("Soy nuevito aña");
-              BluetoothService service = services.firstWhere((s) =>
-                  s.uuid == Guid('6f2fa024-d122-4fa3-a288-8eca1af30502'));
-              ioUuid = service.characteristics.firstWhere((c) =>
-                  c.uuid == Guid('03b1c5d9-534a-4980-aed3-f59615205216'));
-              otaUuid = service.characteristics.firstWhere((c) =>
-                  c.uuid ==
-                  Guid(
-                      'ae995fcd-2c7a-4675-84f8-332caf784e9f')); //Ota comandos (Solo notify)
-              varsUuid = service.characteristics.firstWhere((c) =>
-                  c.uuid == Guid('52a2f121-a8e3-468c-a5de-45dca9a2a207'));
-            } else {
-              BluetoothService espService = services.firstWhere((s) =>
-                  s.uuid == Guid('6f2fa024-d122-4fa3-a288-8eca1af30502'));
-
-              varsUuid = espService.characteristics.firstWhere((c) =>
-                  c.uuid ==
-                  Guid(
-                      '52a2f121-a8e3-468c-a5de-45dca9a2a207')); //DistanceControl:W_Status:EnergyTimer:AwsINIT
-              otaUuid = espService.characteristics.firstWhere((c) =>
-                  c.uuid ==
-                  Guid(
-                      'ae995fcd-2c7a-4675-84f8-332caf784e9f')); //Ota comandos (Solo notify)
-            }
+            BluetoothService service = services.firstWhere(
+                (s) => s.uuid == Guid('6f2fa024-d122-4fa3-a288-8eca1af30502'));
+            ioUuid = service.characteristics.firstWhere(
+                (c) => c.uuid == Guid('03b1c5d9-534a-4980-aed3-f59615205216'));
+            otaUuid = service.characteristics.firstWhere(
+                (c) => c.uuid == Guid('ae995fcd-2c7a-4675-84f8-332caf784e9f'));
+            varsUuid = service.characteristics.firstWhere(
+                (c) => c.uuid == Guid('52a2f121-a8e3-468c-a5de-45dca9a2a207'));
 
             break;
           case '024011_IOT':
@@ -2768,10 +2751,12 @@ class GlobalDataNotifier extends ChangeNotifier {
 
   // Actualizar estado de conexión AWS y notificar a los oyentes
   void updateAWSConnectionState(bool newState) {
-    printLog('Provider: updateAWSConnectionState llamado con newState=$newState, _isConnectedToAWS=$_isConnectedToAWS');
+    printLog(
+        'Provider: updateAWSConnectionState llamado con newState=$newState, _isConnectedToAWS=$_isConnectedToAWS');
     if (_isConnectedToAWS != newState) {
       _isConnectedToAWS = newState;
-      printLog('Provider: Estado AWS cambiado a $_isConnectedToAWS, notificando listeners...');
+      printLog(
+          'Provider: Estado AWS cambiado a $_isConnectedToAWS, notificando listeners...');
       notifyListeners(); // Esto notifica a todos los oyentes que algo cambió
     } else {
       printLog('Provider: Estado AWS sin cambios, no se notifica');

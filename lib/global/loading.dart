@@ -59,11 +59,7 @@ class LoadState extends State<LoadingPage> {
             navigatorKey.currentState?.pushReplacementNamed('/patito');
             break;
           case '027313_IOT':
-            if (Versioner.isPosterior(hardwareVersion, '241220A')) {
-              navigatorKey.currentState?.pushReplacementNamed('/rele1i1o');
-            } else {
-              navigatorKey.currentState?.pushReplacementNamed('/rele');
-            }
+            navigatorKey.currentState?.pushReplacementNamed('/rele1i1o');
             break;
           case '050217_IOT':
             navigatorKey.currentState?.pushReplacementNamed('/millenium');
@@ -245,25 +241,14 @@ class LoadState extends State<LoadingPage> {
             burneoDone = parts2[2] == '1';
             break;
           case '027313_IOT':
-            if (Versioner.isPosterior(hardwareVersion, '241220A')) {
-              ioValues = await bluetoothManager.ioUuid.read();
-              printLog('Valores IO: $ioValues || ${utf8.decode(ioValues)}');
-              varsValues = await bluetoothManager.varsUuid.read();
-              printLog(
-                  'Valores VARS: $varsValues || ${utf8.decode(varsValues)}');
-              var parts2 = utf8.decode(varsValues).split(':');
-              distanceControlActive = parts2[0] == '1';
-              awsInit = parts2[1] == '1';
-              burneoDone = parts2[2] == '1';
-            } else {
-              varsValues = await bluetoothManager.varsUuid.read();
-              var parts2 = utf8.decode(varsValues).split(':');
-              printLog('Valores vars: $parts2');
-              distanceControlActive = parts2[0] == '1';
-              turnOn = parts2[1] == '1';
-              energyTimer = parts2[2];
-              awsInit = parts2[3] == '1';
-            }
+            ioValues = await bluetoothManager.ioUuid.read();
+            printLog('Valores IO: $ioValues || ${utf8.decode(ioValues)}');
+            varsValues = await bluetoothManager.varsUuid.read();
+            printLog('Valores VARS: $varsValues || ${utf8.decode(varsValues)}');
+            var parts2 = utf8.decode(varsValues).split(':');
+            distanceControlActive = parts2[0] == '1';
+            awsInit = parts2[1] == '1';
+            burneoDone = parts2[2] == '1';
             break;
           case '024011_IOT':
             varsValues = await bluetoothManager.varsUuid.read();

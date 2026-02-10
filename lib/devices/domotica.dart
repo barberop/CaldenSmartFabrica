@@ -21,6 +21,8 @@ class DomoticaPageState extends State<DomoticaPage> {
   TextEditingController textController = TextEditingController();
   final PageController _pageController = PageController(initialPage: 0);
 
+  bool varsLoaded = false;
+
   bool testingIN = false;
   bool testingOUT = false;
   List<bool> stateIN = List<bool>.filled(8, false, growable: false);
@@ -29,7 +31,8 @@ class DomoticaPageState extends State<DomoticaPage> {
   int _selectedIndex = 0;
 
   final bool canControl = (accessLevel >= 3 || owner == '');
-
+  List<String> _pulse_mode = [];
+  List<String> _pulse_mode_timers = [];
   // Obtener el índice correcto para cada página
   int _getPageIndex(String pageType) {
     int index = 0;
@@ -51,6 +54,9 @@ class DomoticaPageState extends State<DomoticaPage> {
     // Burneo page y Creds page (solo si accessLevel > 1)
     if (accessLevel > 1) {
       if (pageType == 'burneo') return index; // página de burneo/control
+      index++;
+
+      if (pageType == 'variables') return index; // página de variables
       index++;
 
       if (pageType == 'creds') return index; // página de credenciales
@@ -144,6 +150,16 @@ class DomoticaPageState extends State<DomoticaPage> {
                       _navigateToTab(_getPageIndex('burneo'));
                     },
                   ),
+                if (accessLevel > 1)
+                  ListTile(
+                    leading: const Icon(Icons.tune, color: color4),
+                    title: const Text('Variables',
+                        style: TextStyle(color: color4)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navigateToTab(_getPageIndex('variables'));
+                    },
+                  ),
                 // Creds page (solo si accessLevel > 1)
                 if (accessLevel > 1)
                   ListTile(
@@ -225,6 +241,7 @@ class DomoticaPageState extends State<DomoticaPage> {
     subscribeToWifiStatus();
     subToIO();
     processValues(ioValues);
+    processVarsValues(varsValues);
   }
 
   void updateWifiValues(List<int> data) {
@@ -380,6 +397,62 @@ class DomoticaPageState extends State<DomoticaPage> {
     } else {
       printLog('!=200 ${response.statusCode}');
     }
+  }
+
+  void processVarsValues(List<int> values) {
+    try {
+      varsValues = values;
+      var fun = utf8.decode(values);
+      fun = fun.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+      var parts = fun.split(':');
+      printLog('Vars Valores: $parts', "Amarillo");
+
+      if (parts.length < 11) {
+        printLog('Error: Lectura de vars incompleta. Se bloquean ediciones.');
+        setState(() {
+          varsLoaded = false;
+        });
+        return;
+      }
+
+      awsInit = parts[1] == '1';
+      burneoDone = parts[2] == '1';
+
+      _pulse_mode.clear();
+      _pulse_mode_timers.clear();
+
+      _pulse_mode.addAll([parts[3], parts[4], parts[5], parts[6]]);
+      _pulse_mode_timers.addAll([parts[7], parts[8], parts[9], parts[10]]);
+
+      setState(() {
+        varsLoaded = true;
+      });
+    } catch (e) {
+      printLog('Error crítico procesando vars: $e');
+      setState(() {
+        varsLoaded = false;
+      });
+    }
+  }
+
+  void sendDeviceBehaviour(String pin, bool isSwitch) {
+    String pc = DeviceManager.getProductCode(deviceName);
+    String serialNumber = DeviceManager.extractSerialNumber(deviceName);
+    String msg = '$pc[16]($pin#${isSwitch ? '0' : '1'})';
+    printLog('Se volvio el pin $pin a ${isSwitch ? 'SWITCH' : 'PULSE'}');
+    bluetoothManager.toolsUuid.write(msg.codeUnits);
+    registerActivity(pc, serialNumber,
+        'Cambio de comportamiento del pin $pin a ${isSwitch ? 'SWITCH' : 'PULSE'}');
+  }
+
+  void sendPulseTimer(String pin, String timer) {
+    String pc = DeviceManager.getProductCode(deviceName);
+    String serialNumber = DeviceManager.extractSerialNumber(deviceName);
+    String msg = '$pc[17]($pin#$timer)';
+    printLog('Se cambio el tiempo de pulso del pin $pin a $timer milisegundos');
+    bluetoothManager.toolsUuid.write(msg.codeUnits);
+    registerActivity(pc, serialNumber,
+        'Cambio del tiempo de pulso del pin $pin a $timer milisegundos');
   }
 
   //! VISUAL
@@ -807,7 +880,268 @@ class DomoticaPageState extends State<DomoticaPage> {
           ),
         ),
 
-        //*- Página 5 CREDENTIAL -*\\
+        //*- Página 5 VARIABLES -*\\
+        Scaffold(
+          backgroundColor: color4,
+          body: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
+                color: color4,
+                child: Column(
+                  children: [
+                    const Text(
+                      "Configuración de Salidas",
+                      style: TextStyle(
+                        color: color0,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      varsLoaded
+                          ? "Selecciona comportamiento (Switch/Pulso) y duración"
+                          : "⚠ Opciones no disponibles para el equipo",
+                      style: TextStyle(
+                        color: varsLoaded
+                            ? color0.withValues(alpha: 0.7)
+                            : Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: 4,
+                  padding: const EdgeInsets.only(top: 10, bottom: 100),
+                  itemBuilder: (context, index) {
+                    if (index >= _pulse_mode.length) {
+                      return const SizedBox.shrink();
+                    }
+
+                    bool isPulse = _pulse_mode[index] == '1';
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 15, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: color0,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: color1, width: 1),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                "Salida $index",
+                                style: const TextStyle(
+                                  color: color4,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const Spacer(),
+                              InkWell(
+                                onTap: !varsLoaded
+                                    ? null
+                                    : () {
+                                        setState(
+                                            () => _pulse_mode[index] = '0');
+                                        sendDeviceBehaviour(
+                                            index.toString(), true);
+                                      },
+                                child: Opacity(
+                                  opacity: varsLoaded ? 1.0 : 0.5,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: !isPulse
+                                          ? color4
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: color4),
+                                    ),
+                                    child: Text(
+                                      "Switch",
+                                      style: TextStyle(
+                                          color: !isPulse ? color1 : color4,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: !varsLoaded
+                                    ? null
+                                    : () {
+                                        setState(
+                                            () => _pulse_mode[index] = '1');
+                                        sendDeviceBehaviour(
+                                            index.toString(), false);
+                                      },
+                                child: Opacity(
+                                  opacity: varsLoaded ? 1.0 : 0.5,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          isPulse ? color4 : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: color4),
+                                    ),
+                                    child: Text(
+                                      "Pulse",
+                                      style: TextStyle(
+                                          color: isPulse ? color1 : color4,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isPulse) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: color1.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8)),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  const Icon(Icons.timer,
+                                      color: color4, size: 18),
+                                  const SizedBox(width: 8),
+                                  const Text("Duración:",
+                                      style: TextStyle(
+                                          color: color4, fontSize: 14)),
+                                  const Spacer(),
+                                  Text(
+                                    _pulse_mode_timers.length > index
+                                        ? '${_pulse_mode_timers[index]} ms'
+                                        : '---',
+                                    style: const TextStyle(
+                                        color: color4,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  InkWell(
+                                    onTap: !varsLoaded
+                                        ? null
+                                        : () {
+                                            TextEditingController timeCtrl =
+                                                TextEditingController();
+                                            if (_pulse_mode_timers.length >
+                                                index) {
+                                              timeCtrl.text =
+                                                  _pulse_mode_timers[index];
+                                            }
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                backgroundColor: color0,
+                                                title: const Text("Tiempo (ms)",
+                                                    style: TextStyle(
+                                                        color: color4)),
+                                                content: TextField(
+                                                  controller: timeCtrl,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  style: const TextStyle(
+                                                      color: color4),
+                                                  decoration:
+                                                      const InputDecoration(
+                                                    hintText: "Ej: 500",
+                                                    hintStyle: TextStyle(
+                                                        color: Colors.white30),
+                                                    enabledBorder:
+                                                        UnderlineInputBorder(
+                                                            borderSide:
+                                                                BorderSide(
+                                                                    color:
+                                                                        color4)),
+                                                    focusedBorder:
+                                                        UnderlineInputBorder(
+                                                            borderSide:
+                                                                BorderSide(
+                                                                    color:
+                                                                        color4,
+                                                                    width: 2)),
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    child: const Text(
+                                                        "Cancelar",
+                                                        style: TextStyle(
+                                                            color: color4)),
+                                                    onPressed: () =>
+                                                        Navigator.pop(ctx),
+                                                  ),
+                                                  TextButton(
+                                                    child: const Text("Guardar",
+                                                        style: TextStyle(
+                                                            color: color4,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold)),
+                                                    onPressed: () {
+                                                      if (timeCtrl
+                                                          .text.isNotEmpty) {
+                                                        sendPulseTimer(
+                                                            index.toString(),
+                                                            timeCtrl.text);
+                                                        setState(() {
+                                                          _pulse_mode_timers[
+                                                                  index] =
+                                                              timeCtrl.text;
+                                                        });
+                                                      }
+                                                      Navigator.pop(ctx);
+                                                    },
+                                                  )
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                    child: Icon(Icons.edit,
+                                        color: varsLoaded
+                                            ? color4
+                                            : color4.withValues(alpha: 0.3),
+                                        size: 20),
+                                  )
+                                ],
+                              ),
+                            )
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        //*- Página 6 CREDENTIAL -*\\
         const CredsTab(),
       ],
 

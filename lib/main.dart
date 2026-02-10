@@ -20,7 +20,6 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'devices/patito.dart';
-import 'devices/rele.dart';
 import 'devices/roller.dart';
 
 Future<void> main() async {
@@ -103,7 +102,6 @@ class MyAppState extends State<MyApp> {
         '/menu': (context) => const MenuPage(),
         '/calefactor': (context) => const CalefactoresPage(),
         '/detector': (context) => const DetectorPage(),
-        '/rele': (context) => const RelePage(),
         '/domotica': (context) => const DomoticaPage(),
         '/patito': (context) => const PatitoPage(),
         '/roller': (context) => const RollerPage(),
